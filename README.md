@@ -1,2 +1,2 @@
 # strava_activity_generator
-StravaTrainingGenerator
+StravaActivityGenerator

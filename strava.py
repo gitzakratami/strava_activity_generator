@@ -7,13 +7,13 @@ import base64
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QSpinBox, QPushButton,
     QCheckBox, QFormLayout, QHBoxLayout, QVBoxLayout, QCalendarWidget, QToolButton,
-    QTableView # Potrzebny import do znalezienia widoku tabeli
+    QTableView
 )
 from PyQt6.QtCore import QLocale, Qt, QSize
 from PyQt6.QtGui import QIcon, QPixmap, QTextCharFormat, QColor, QFont
 
 # --- KONFIGURACJA ---
-CONFIG_FILE = 'config.txt'
+CONFIG_FILE = 'config.cfg'
 DEFAULT_TIMEZONE = 'Europe/Warsaw'
 # Wtorek = 2, Czwartek = 4 (standard PyQt: poniedziałek=1)
 TRENING_DNI_TYGODNIA = [2, 4] 
@@ -109,6 +109,10 @@ STYLESHEET = f"""
         color: white; font-size: 14px; font-weight: bold;
         background-color: transparent; border: none;
     }}
+    /* POPRAWKA: Ukrycie strzałki przy nazwie miesiąca */
+    QCalendarWidget QToolButton#qt_calendar_monthbutton::menu-indicator {{
+        image: none;
+    }}
     QCalendarWidget QTableView {{
         background-color: {LIGHT_BACKGROUND};
         selection-background-color: {STRAVA_ORANGE};
@@ -130,7 +134,7 @@ class App(QWidget):
         self.setStyleSheet(STYLESHEET)
 
     def init_ui(self):
-        self.setWindowTitle("Generator Treningów Strava")
+        self.setWindowTitle("Strava Activity Generator")
         
         # ... (reszta UI jest taka sama)
         form_layout = QFormLayout()
@@ -166,18 +170,21 @@ class App(QWidget):
         self.calendar = QCalendarWidget()
         # Wyłączenie bocznej kolumny z numerami tygodni
         self.calendar.setVerticalHeaderFormat(QCalendarWidget.VerticalHeaderFormat.NoVerticalHeader)
+        # Wyłączenie rozwijanej listy miesięcy (czyni przycisk nieklikalnym)
+        self.calendar.findChild(QToolButton, "qt_calendar_monthbutton").setEnabled(False)
+        
         self.calendar.setLocale(QLocale(QLocale.Language.Polish))
         self.calendar.setGridVisible(True)
         
-        # --- OSTATECZNA POPRAWKA: Programatyczna stylizacja nagłówków dni tygodnia ---
+        # Stylizacja kolorów tekstu dni tygodnia
         weekday_format = QTextCharFormat()
         weekday_format.setForeground(QColor(WEEKDAY_TEXT_COLOR))
-        weekday_format.setBackground(QColor(LIGHT_BACKGROUND)) # Ustawienie tła!
+        weekday_format.setBackground(QColor(LIGHT_BACKGROUND)) 
         weekday_format.setFontWeight(QFont.Weight.Bold)
         
         weekend_format = QTextCharFormat()
         weekend_format.setForeground(QColor(WEEKEND_TEXT_COLOR))
-        weekend_format.setBackground(QColor(LIGHT_BACKGROUND)) # Ustawienie tła!
+        weekend_format.setBackground(QColor(LIGHT_BACKGROUND))
         weekend_format.setFontWeight(QFont.Weight.Bold)
 
         for day in range(1, 6): # Poniedziałek - Piątek
@@ -220,7 +227,7 @@ class App(QWidget):
             save_config(self.config)
             
             self.number_spinbox.setValue(workout_number + 1)
-            self.status_label.setText(f"✅ Sukces! Stworzono plik: {filename}")
+            self.status_label.setText(f"Sukces! Stworzono plik: {filename}")
             self.status_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
 
             if self.auto_advance_check.isChecked():
@@ -229,10 +236,10 @@ class App(QWidget):
                 self.calendar.setCurrentPage(next_date.year, next_date.month)
                 
         except (ValueError, TypeError) as e:
-            self.status_label.setText(f"❌ Błąd: Sprawdź wprowadzone dane. {e}")
+            self.status_label.setText(f"Błąd: Sprawdź wprowadzone dane. {e}")
             self.status_label.setStyleSheet("color: #F44336; font-weight: bold;")
         except Exception as e:
-            self.status_label.setText(f"❌ Wystąpił błąd: {e}")
+            self.status_label.setText(f"Wystąpił błąd: {e}")
             self.status_label.setStyleSheet("color: #F44336; font-weight: bold;")
 
 if __name__ == '__main__':

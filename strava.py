@@ -21,8 +21,9 @@ WEEKDAY_TEXT_COLOR = "#e0e0e0"
 WEEKEND_TEXT_COLOR = "#ff6347" # Czerwono-pomarańczowy dla weekendów
 
 # --- IKONY (ZAKODOWANE W BASE64) ---
-LEFT_ARROW_B64 = "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAAdklEQVRo3u3XwQkAIAwEwX6iH6iP6jgkKJH4L03gfuED83s2BkSICEiSBGxJgEwSgKQE4ElC4P8s4Anx+fCe0wTQFQMYfQEw/gIw/gCAWQBYBoBVADANADMAkADQASAB8HvzXzZgB4gIAcnS5QE20y8q43YxGQAAAABJRU5ErkJggg=="
-RIGHT_ARROW_B64 = "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAAd0lEQVRo3u3XQQoAIAwEwPz/02kHdGGQ5hQyq3vRkge92QIiQgQkScCWBExJgEwSgKQE4ElCoH8W8AR5+vC+0wTQFQMYfQEw/gIw/gCAWQBYBoBVADANADMAkADQASABcPt7Mxs1AQkRkCRJlp4BYBwzYSPw9xMAAAAASUVORK5CYII="
+# POPRAWKA: Nowe, pomarańczowe strzałki w kolorze tła
+LEFT_ARROW_B64 = "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgd2lkdGg9IjQ4Ij48cGF0aCBmaWxsPSIjRkM0QzAyIiBkPSJNMzAuODMgMzIuNjdsLTkuMTctOS4xNyA5LjE3LTkuMTdMMjggMTEuNWwtMTIgMTIgMTIgMTJ6Ii8+PHBhdGggZD0iTTAgMGg0OHY0OEgweiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg=="
+RIGHT_ARROW_B64 = "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgd2lkdGg9IjQ4Ij48cGF0aCBmaWxsPSIjRkM0QzAyIiBkPSJNMTcuMTcgOC44M0wyMCAxMS41bDkuMTcgOS4xNy05LjE3IDkuMTdMMTcuMTcgMzBsMTItMTItMTItMTJ6Ii8+PHBhdGggZD0iTTAgMGg0OHY0OEgweiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg=="
 CHECKMARK_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAABmJLR0QA/wD/AP+gvaeTAAABHklEQVR4nO3aMUoDURhF4d9gIYiNjaVg8wNYWfgOFr6AhYWNYi8k2HgFNjb2BiGFYGMhNBCSBJck7uBu5jH/ne+EcO7cWQgAAAAAAIC/wni8fOa122kAx3E0eY6zbY/X22mASZKkKSLNsa633QzgAsA6gAcAZgA4A/AfgF8AzgC4AHAXwD+AbwD8C7BnAM4A/AfgG4A/AOcA/gH4BWDPAPwEcAfAdQBfAO8A+ArgO4A7AN8A7gC8A7gD8A3gDuAPAP8A3AG8A+AOwDeAOwDvAG4A/AI4A3AG4BvAGYA/AOcAfgK4A/ANwBmA/wBcAdgH8A9g3wC8AdgD8AfgHcAbgD8A7gA8A/gGcATgC8AZgK8ANgC8AVgD8AfgHcAbgH8A/gAAAADAc/kA2a/c3jXM9W4AAAAASUVORK5CYII="
 
 
@@ -109,7 +110,6 @@ STYLESHEET = f"""
         color: white; font-size: 14px; font-weight: bold;
         background-color: transparent; border: none;
     }}
-    /* POPRAWKA: Ukrycie strzałki przy nazwie miesiąca */
     QCalendarWidget QToolButton#qt_calendar_monthbutton::menu-indicator {{
         image: none;
     }}
@@ -193,7 +193,7 @@ class App(QWidget):
         self.calendar.setWeekdayTextFormat(Qt.DayOfWeek.Saturday, weekend_format)
         self.calendar.setWeekdayTextFormat(Qt.DayOfWeek.Sunday, weekend_format)
 
-        # Ustawienie ikon strzałek
+        # POPRAWKA: Ustawienie pomarańczowych ikon strzałek, które wtapiają się w tło
         left_pixmap = QPixmap()
         left_pixmap.loadFromData(base64.b64decode(LEFT_ARROW_B64))
         right_pixmap = QPixmap()
@@ -245,5 +245,6 @@ class App(QWidget):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = App()
+    app.setWindowIcon(QIcon("strava_icon.ico"))
     window.show()
     sys.exit(app.exec())

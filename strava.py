@@ -6,28 +6,27 @@ import base64
 
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QSpinBox, QPushButton,
-    QCheckBox, QFormLayout, QHBoxLayout, QVBoxLayout, QCalendarWidget, QToolButton,
-    QTableView
+    QCheckBox, QFormLayout, QHBoxLayout, QVBoxLayout, QCalendarWidget, QToolButton
 )
 from PyQt6.QtCore import QLocale, Qt, QSize
 from PyQt6.QtGui import QIcon, QPixmap, QTextCharFormat, QColor, QFont
 
-# --- KONFIGURACJA ---
+# --- CONFIGURATION ---
 CONFIG_FILE = 'config.cfg'
 DEFAULT_TIMEZONE = 'Europe/Warsaw'
-# Wtorek = 2, Czwartek = 4 (standard PyQt: poniedziałek=1)
-TRENING_DNI_TYGODNIA = [2, 4] 
+OUTPUT_FOLDER = 'generated_trainings' # Folder for all generated GPX files
+# Day codes for auto-advance feature (Monday=1, ..., Sunday=7)
+TRAINING_DAYS = [2, 4] # Tuesday and Thursday
 WEEKDAY_TEXT_COLOR = "#e0e0e0"
-WEEKEND_TEXT_COLOR = "#ff6347" # Czerwono-pomarańczowy dla weekendów
+WEEKEND_TEXT_COLOR = "#ff6347"
 
-# --- IKONY (ZAKODOWANE W BASE64) ---
-# POPRAWKA: Nowe, pomarańczowe strzałki w kolorze tła
-LEFT_ARROW_B64 = "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgd2lkdGg9IjQ4Ij48cGF0aCBmaWxsPSIjRkM0QzAyIiBkPSJNMzAuODMgMzIuNjdsLTkuMTctOS4xNyA5LjE3LTkuMTdMMjggMTEuNWwtMTIgMTIgMTIgMTJ6Ii8+PHBhdGggZD0iTTAgMGg0OHY0OEgweiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg=="
-RIGHT_ARROW_B64 = "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgd2lkdGg9IjQ4Ij48cGF0aCBmaWxsPSIjRkM0QzAyIiBkPSJNMTcuMTcgOC44M0wyMCAxMS41bDkuMTcgOS4xNy05LjE3IDkuMTdMMTcuMTcgMzBsMTItMTItMTItMTJ6Ii8+PHBhdGggZD0iTTAgMGg0OHY0OEgweiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg=="
-CHECKMARK_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAABmJLR0QA/wD/AP+gvaeTAAABHklEQVR4nO3aMUoDURhF4d9gIYiNjaVg8wNYWfgOFr6AhYWNYi8k2HgFNjb2BiGFYGMhNBCSBJck7uBu5jH/ne+EcO7cWQgAAAAAAIC/wni8fOa122kAx3E0eY6zbY/X22mASZKkKSLNsa633QzgAsA6gAcAZgA4A/AfgF8AzgC4AHAXwD+AbwD8C7BnAM4A/AfgG4A/AOcA/gH4BWDPAPwEcAfAdQBfAO8A+ArgO4A7AN8A7gC8A7gD8A3gDuAPAP8A3AG8A+AOwDeAOwDvAG4A/AI4A3AG4BvAGYA/AOcAfgK4A/ANwBmA/wBcAdgH8A9g3wC8AdgD8AfgHcAbgD8A7gA8A/gGcATgC8AZgK8ANgC8AVgD8AfgHcAbgH8A/gAAAADAc/kA2a/c3jXM9W4AAAAASUVORK5CYII="
+# --- ICONS (BASE64 ENCODED) ---
+LEFT_ARROW_B64 = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgAQMAAABJtOi3AAAAAXNSR0IB2cksfwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAZQTFRF/EwC7UsGq+ltZgAAABNJREFUeJxjZAACxsFJNDQwMAAADnABIU6p3/gAAAAASUVORK5CYII="
+RIGHT_ARROW_B64 = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgAQMAAABJtOi3AAAAAXNSR0IB2cksfwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAZQTFRF/EwC7UsGq+ltZgAAABNJREFUeJxjZAACxsFJNDQwMAAADnABIU6p3/gAAAAASUVORK5CYII="
 
+# pyinstaller --onefile --windowed --icon="ikona_better.ico" strava.py
 
-# --- LOGIKA PROGRAMU (BEZ ZMIAN) ---
+# --- CORE LOGIC FUNCTIONS ---
 def load_config():
     if not os.path.exists(CONFIG_FILE): return {'base_name': 'Muay Thai', 'last_number': 59}
     config = {}
@@ -44,27 +43,34 @@ def save_config(config_data):
 
 def find_next_training_day(start_date):
     next_day = start_date + datetime.timedelta(days=1)
-    while next_day.isoweekday() not in TRENING_DNI_TYGODNIA:
+    while next_day.isoweekday() not in TRAINING_DAYS:
         next_day += datetime.timedelta(days=1)
     return next_day
 
 def create_gpx_file(start_datetime, duration_minutes, workout_name, timezone_str):
     try:
+        # Ensure the output directory exists
+        os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+        
         local_tz = pytz.timezone(timezone_str)
         start_time_local = local_tz.localize(start_datetime)
         end_time_local = start_time_local + datetime.timedelta(minutes=duration_minutes)
         start_time_utc = start_time_local.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
         end_time_utc = end_time_local.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
         safe_filename = workout_name.replace(' ', '_').replace('#', '') + '.gpx'
+        
+        # Create the full path to the file inside the output folder
+        full_path = os.path.join(OUTPUT_FOLDER, safe_filename)
+        
         gpx_template = f"""<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Workout Generator" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd"><metadata><time>{start_time_utc}</time></metadata><trk><name>{workout_name}</name><trkseg><trkpt lat="0" lon="0"><time>{start_time_utc}</time></trkpt><trkpt lat="0" lon="0"><time>{end_time_utc}</time></trkpt></trkseg></trk></gpx>"""
-        with open(safe_filename, 'w') as f:
+        with open(full_path, 'w') as f:
             f.write(gpx_template)
         return safe_filename, None
     except Exception as e:
         return None, str(e)
 
 
-# --- ARKUSZ STYLÓW QSS ---
+# --- STYLESHEET (QSS) ---
 STRAVA_ORANGE = "#FC4C02"
 DARK_BACKGROUND = "#282828"
 LIGHT_BACKGROUND = "#3a3a3a"
@@ -85,13 +91,22 @@ STYLESHEET = f"""
     QLineEdit:focus, QSpinBox:focus {{ border: 1px solid {STRAVA_ORANGE}; }}
     QSpinBox::up-button, QSpinBox::down-button {{ width: 18px; }}
     
-    QPushButton {{
+    QPushButton#GenerateButton {{
         background-color: {STRAVA_ORANGE}; color: white; font-weight: bold;
         border: none; border-radius: 4px; padding: 8px 16px;
     }}
-    QPushButton:hover {{ background-color: #e04402; }}
-    QPushButton:pressed {{ background-color: #c73c02; }}
+    QPushButton#GenerateButton:hover {{ background-color: #e04402; }}
+    QPushButton#GenerateButton:pressed {{ background-color: #c73c02; }}
     
+    QPushButton#OpenFolderButton {{
+        background-color: {LIGHT_BACKGROUND};
+        border: 1px solid {BORDER_COLOR};
+        font-weight: bold;
+        border-radius: 4px; padding: 6px 12px;
+    }}
+    QPushButton#OpenFolderButton:hover {{ background-color: #4a4a4a; }}
+    QPushButton#OpenFolderButton:disabled {{ color: #707070; }}
+
     QCheckBox::indicator:unchecked {{
         background-color: {LIGHT_BACKGROUND}; border: 1px solid {BORDER_COLOR};
         border-radius: 3px;
@@ -99,10 +114,8 @@ STYLESHEET = f"""
     QCheckBox::indicator:checked {{
         background-color: {STRAVA_ORANGE}; border: 1px solid {STRAVA_ORANGE};
         border-radius: 3px;
-        image: url(data:image/png;base64,{CHECKMARK_PNG_B64});
     }}
     
-    /* --- KALENDARZ --- */
     QCalendarWidget QWidget#qt_calendar_navigationbar {{
         background-color: {STRAVA_ORANGE}; border-radius: 4px;
     }}
@@ -126,6 +139,7 @@ STYLESHEET = f"""
     }}
 """
 
+# --- MAIN APPLICATION CLASS ---
 class App(QWidget):
     def __init__(self):
         super().__init__()
@@ -135,8 +149,9 @@ class App(QWidget):
 
     def init_ui(self):
         self.setWindowTitle("Strava Activity Generator")
+        self.resize(630, 275)
         
-        # ... (reszta UI jest taka sama)
+        # Left Panel: Form Layout
         form_layout = QFormLayout()
         form_layout.setContentsMargins(10, 10, 10, 10)
         form_layout.setSpacing(12)
@@ -152,31 +167,42 @@ class App(QWidget):
         time_layout.addStretch()
         self.duration_entry = QLineEdit("90")
         self.duration_entry.setFixedWidth(50)
-        form_layout.addRow("Nazwa bazowa:", self.name_entry)
-        form_layout.addRow("Numer treningu:", self.number_spinbox)
-        form_layout.addRow("Godzina (GG:MM):", time_layout)
-        form_layout.addRow("Czas trwania (min):", self.duration_entry)
+        
+        form_layout.addRow("Base name:", self.name_entry)
+        form_layout.addRow("Workout number:", self.number_spinbox)
+        form_layout.addRow("Time (HH:MM):", time_layout)
+        form_layout.addRow("Duration (min):", self.duration_entry)
+        
         left_vbox = QVBoxLayout()
         left_vbox.addLayout(form_layout)
-        self.auto_advance_check = QCheckBox("Automatycznie ustaw następny termin (Wt/Czw)")
+        
+        self.auto_advance_check = QCheckBox("Automatically set next date (Tue/Thu)")
         self.auto_advance_check.setChecked(True)
         left_vbox.addWidget(self.auto_advance_check)
-        self.generate_button = QPushButton("Generuj plik GPX")
-        left_vbox.addWidget(self.generate_button)
+        
+        # Button layout for side-by-side buttons
+        button_layout = QHBoxLayout()
+        self.generate_button = QPushButton("Generate GPX File")
+        self.generate_button.setObjectName("GenerateButton") # For styling
+        self.open_folder_button = QPushButton("Open Folder")
+        self.open_folder_button.setObjectName("OpenFolderButton") # For styling
+        self.open_folder_button.setEnabled(os.path.exists(OUTPUT_FOLDER)) # Enable if folder already exists
+        button_layout.addWidget(self.generate_button)
+        button_layout.addWidget(self.open_folder_button)
+        left_vbox.addLayout(button_layout)
+        
         self.status_label = QLabel("")
         left_vbox.addWidget(self.status_label)
         left_vbox.addStretch(1)
 
+        # Right Panel: Calendar Widget
         self.calendar = QCalendarWidget()
-        # Wyłączenie bocznej kolumny z numerami tygodni
         self.calendar.setVerticalHeaderFormat(QCalendarWidget.VerticalHeaderFormat.NoVerticalHeader)
-        # Wyłączenie rozwijanej listy miesięcy (czyni przycisk nieklikalnym)
         self.calendar.findChild(QToolButton, "qt_calendar_monthbutton").setEnabled(False)
-        
-        self.calendar.setLocale(QLocale(QLocale.Language.Polish))
+        self.calendar.setLocale(QLocale(QLocale.Language.English))
+        self.calendar.setFirstDayOfWeek(Qt.DayOfWeek.Monday)
         self.calendar.setGridVisible(True)
         
-        # Stylizacja kolorów tekstu dni tygodnia
         weekday_format = QTextCharFormat()
         weekday_format.setForeground(QColor(WEEKDAY_TEXT_COLOR))
         weekday_format.setBackground(QColor(LIGHT_BACKGROUND)) 
@@ -187,13 +213,12 @@ class App(QWidget):
         weekend_format.setBackground(QColor(LIGHT_BACKGROUND))
         weekend_format.setFontWeight(QFont.Weight.Bold)
 
-        for day in range(1, 6): # Poniedziałek - Piątek
+        for day in range(1, 6): # Monday - Friday
             self.calendar.setWeekdayTextFormat(Qt.DayOfWeek(day), weekday_format)
         
         self.calendar.setWeekdayTextFormat(Qt.DayOfWeek.Saturday, weekend_format)
         self.calendar.setWeekdayTextFormat(Qt.DayOfWeek.Sunday, weekend_format)
 
-        # POPRAWKA: Ustawienie pomarańczowych ikon strzałek, które wtapiają się w tło
         left_pixmap = QPixmap()
         left_pixmap.loadFromData(base64.b64decode(LEFT_ARROW_B64))
         right_pixmap = QPixmap()
@@ -210,11 +235,20 @@ class App(QWidget):
         main_layout.addLayout(left_vbox)
         main_layout.addWidget(self.calendar)
         self.generate_button.clicked.connect(self.generate)
+        self.open_folder_button.clicked.connect(self.open_output_folder) # Connect new button
 
+    # --- ACTION METHODS ---
+    def open_output_folder(self):
+        try:
+            os.startfile(os.path.realpath(OUTPUT_FOLDER))
+        except Exception as e:
+            self.status_label.setText(f"Error opening folder: {e}")
+            self.status_label.setStyleSheet("color: #F44336; font-weight: bold;")
+    
     def generate(self):
         try:
             base_name = self.name_entry.text().strip()
-            if not base_name: raise ValueError("Nazwa bazowa nie może być pusta.")
+            if not base_name: raise ValueError("Base name cannot be empty.")
             workout_number = self.number_spinbox.value()
             workout_name = f"{base_name} #{workout_number}"
             date_val = self.calendar.selectedDate().toPyDate()
@@ -227,8 +261,9 @@ class App(QWidget):
             save_config(self.config)
             
             self.number_spinbox.setValue(workout_number + 1)
-            self.status_label.setText(f"Sukces! Stworzono plik: {filename}")
+            self.status_label.setText(f"Success! Created file: {filename}")
             self.status_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
+            self.open_folder_button.setEnabled(True) # Enable button after first success
 
             if self.auto_advance_check.isChecked():
                 next_date = find_next_training_day(date_val)
@@ -236,15 +271,17 @@ class App(QWidget):
                 self.calendar.setCurrentPage(next_date.year, next_date.month)
                 
         except (ValueError, TypeError) as e:
-            self.status_label.setText(f"Błąd: Sprawdź wprowadzone dane. {e}")
+            self.status_label.setText(f"Error: Please check the input data. {e}")
             self.status_label.setStyleSheet("color: #F44336; font-weight: bold;")
         except Exception as e:
-            self.status_label.setText(f"Wystąpił błąd: {e}")
+            self.status_label.setText(f"An error occurred: {e}")
             self.status_label.setStyleSheet("color: #F44336; font-weight: bold;")
 
+# --- APPLICATION LAUNCHER ---
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = App()
-    app.setWindowIcon(QIcon("strava_icon.ico"))
+    if os.path.exists("ikona_better.ico"):
+        app.setWindowIcon(QIcon("ikona_better.ico"))
     window.show()
     sys.exit(app.exec())

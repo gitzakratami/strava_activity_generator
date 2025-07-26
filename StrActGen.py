@@ -12,10 +12,11 @@ from PyQt6.QtCore import QLocale, Qt, QSize
 from PyQt6.QtGui import QIcon, QPixmap, QTextCharFormat, QColor, QFont
 
 # --- CONFIGURATION ---
-CONFIG_FILE = 'config.cfg'
+APP_DATA_PATH = os.path.join(os.getenv('LOCALAPPDATA'), 'StravaActivityGenerator')
+CONFIG_FILE_PATH = os.path.join(APP_DATA_PATH, 'config.cfg')
+OUTPUT_FOLDER_PATH = os.path.join(os.path.expanduser('~/Documents'), 'Strava Activity Generator')
+
 DEFAULT_TIMEZONE = 'Europe/Warsaw'
-OUTPUT_FOLDER = 'generated_trainings' # Folder for all generated GPX files
-# Day codes for auto-advance feature (Monday=1, ..., Sunday=7)
 TRAINING_DAYS = [2, 4] # Tuesday and Thursday
 WEEKDAY_TEXT_COLOR = "#e0e0e0"
 WEEKEND_TEXT_COLOR = "#ff6347"
@@ -24,20 +25,23 @@ WEEKEND_TEXT_COLOR = "#ff6347"
 LEFT_ARROW_B64 = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgAQMAAABJtOi3AAAAAXNSR0IB2cksfwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAZQTFRF/EwC7UsGq+ltZgAAABNJREFUeJxjZAACxsFJNDQwMAAADnABIU6p3/gAAAAASUVORK5CYII="
 RIGHT_ARROW_B64 = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgAQMAAABJtOi3AAAAAXNSR0IB2cksfwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAZQTFRF/EwC7UsGq+ltZgAAABNJREFUeJxjZAACxsFJNDQwMAAADnABIU6p3/gAAAAASUVORK5CYII="
 
-# pyinstaller --onefile --windowed --icon="ikona_better.ico" strava.py
-
 # --- CORE LOGIC FUNCTIONS ---
 def load_config():
-    if not os.path.exists(CONFIG_FILE): return {'base_name': 'Muay Thai', 'last_number': 59}
+    os.makedirs(APP_DATA_PATH, exist_ok=True)
+    if not os.path.exists(CONFIG_FILE_PATH): 
+        # Default last_number is 0, so the first workout starts at #1
+        return {'base_name': 'Muay Thai', 'last_number': 0}
+    
     config = {}
-    with open(CONFIG_FILE, 'r') as f:
+    with open(CONFIG_FILE_PATH, 'r') as f:
         for line in f:
             if '=' in line: config[line.strip().split('=', 1)[0]] = line.strip().split('=', 1)[1]
     config['last_number'] = int(config.get('last_number', 0))
     return config
 
 def save_config(config_data):
-    with open(CONFIG_FILE, 'w') as f:
+    os.makedirs(APP_DATA_PATH, exist_ok=True)
+    with open(CONFIG_FILE_PATH, 'w') as f:
         f.write(f"base_name={config_data['base_name']}\n")
         f.write(f"last_number={config_data['last_number']}\n")
 
@@ -49,8 +53,7 @@ def find_next_training_day(start_date):
 
 def create_gpx_file(start_datetime, duration_minutes, workout_name, timezone_str):
     try:
-        # Ensure the output directory exists
-        os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+        os.makedirs(OUTPUT_FOLDER_PATH, exist_ok=True)
         
         local_tz = pytz.timezone(timezone_str)
         start_time_local = local_tz.localize(start_datetime)
@@ -59,8 +62,7 @@ def create_gpx_file(start_datetime, duration_minutes, workout_name, timezone_str
         end_time_utc = end_time_local.astimezone(pytz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
         safe_filename = workout_name.replace(' ', '_').replace('#', '') + '.gpx'
         
-        # Create the full path to the file inside the output folder
-        full_path = os.path.join(OUTPUT_FOLDER, safe_filename)
+        full_path = os.path.join(OUTPUT_FOLDER_PATH, safe_filename)
         
         gpx_template = f"""<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Workout Generator" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd"><metadata><time>{start_time_utc}</time></metadata><trk><name>{workout_name}</name><trkseg><trkpt lat="0" lon="0"><time>{start_time_utc}</time></trkpt><trkpt lat="0" lon="0"><time>{end_time_utc}</time></trkpt></trkseg></trk></gpx>"""
         with open(full_path, 'w') as f:
@@ -69,14 +71,12 @@ def create_gpx_file(start_datetime, duration_minutes, workout_name, timezone_str
     except Exception as e:
         return None, str(e)
 
-
 # --- STYLESHEET (QSS) ---
 STRAVA_ORANGE = "#FC4C02"
 DARK_BACKGROUND = "#282828"
 LIGHT_BACKGROUND = "#3a3a3a"
 TEXT_COLOR = "#f0f0f0"
 BORDER_COLOR = "#505050"
-
 
 STYLESHEET = f"""
     QWidget {{
@@ -180,13 +180,12 @@ class App(QWidget):
         self.auto_advance_check.setChecked(True)
         left_vbox.addWidget(self.auto_advance_check)
         
-        # Button layout for side-by-side buttons
         button_layout = QHBoxLayout()
         self.generate_button = QPushButton("Generate GPX File")
-        self.generate_button.setObjectName("GenerateButton") # For styling
+        self.generate_button.setObjectName("GenerateButton")
         self.open_folder_button = QPushButton("Open Folder")
-        self.open_folder_button.setObjectName("OpenFolderButton") # For styling
-        self.open_folder_button.setEnabled(os.path.exists(OUTPUT_FOLDER)) # Enable if folder already exists
+        self.open_folder_button.setObjectName("OpenFolderButton")
+        self.open_folder_button.setEnabled(os.path.exists(OUTPUT_FOLDER_PATH))
         button_layout.addWidget(self.generate_button)
         button_layout.addWidget(self.open_folder_button)
         left_vbox.addLayout(button_layout)
@@ -231,16 +230,30 @@ class App(QWidget):
             next_button.setIcon(QIcon(right_pixmap))
             next_button.setIconSize(QSize(16, 16))
 
+        # Main Layout
         main_layout = QHBoxLayout(self)
         main_layout.addLayout(left_vbox)
         main_layout.addWidget(self.calendar)
+        
+        # Connect signals to methods
         self.generate_button.clicked.connect(self.generate)
-        self.open_folder_button.clicked.connect(self.open_output_folder) # Connect new button
+        self.open_folder_button.clicked.connect(self.open_output_folder)
+        self.number_spinbox.valueChanged.connect(self.on_config_changed)
+        self.name_entry.textChanged.connect(self.on_config_changed)
 
     # --- ACTION METHODS ---
+    def on_config_changed(self):
+        base_name = self.name_entry.text().strip()
+        current_number_for_next_workout = self.number_spinbox.value()
+        
+        self.config['base_name'] = base_name
+        self.config['last_number'] = current_number_for_next_workout - 1
+        
+        save_config(self.config)
+
     def open_output_folder(self):
         try:
-            os.startfile(os.path.realpath(OUTPUT_FOLDER))
+            os.startfile(os.path.realpath(OUTPUT_FOLDER_PATH))
         except Exception as e:
             self.status_label.setText(f"Error opening folder: {e}")
             self.status_label.setStyleSheet("color: #F44336; font-weight: bold;")
@@ -263,7 +276,7 @@ class App(QWidget):
             self.number_spinbox.setValue(workout_number + 1)
             self.status_label.setText(f"Success! Created file: {filename}")
             self.status_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
-            self.open_folder_button.setEnabled(True) # Enable button after first success
+            self.open_folder_button.setEnabled(True)
 
             if self.auto_advance_check.isChecked():
                 next_date = find_next_training_day(date_val)
@@ -281,7 +294,7 @@ class App(QWidget):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = App()
-    if os.path.exists("ikona_better.ico"):
-        app.setWindowIcon(QIcon("ikona_better.ico"))
+    if os.path.exists("icon.ico"):
+        app.setWindowIcon(QIcon("icon.ico"))
     window.show()
     sys.exit(app.exec())

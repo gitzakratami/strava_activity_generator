@@ -5,7 +5,6 @@
 A sleek, dark-themed desktop application designed to quickly generate GPX files for manual Strava activities like gym workouts, yoga, or any GPS-less training. This tool eliminates the tedious process of adding activities one by one on the Strava website, allowing you to create and upload them in bulk.
 
 ![App Screenshot](https://github.com/gitzakratami/strava_activity_generator/blob/main/screenshots/scr1.png)
-> **Note:** To update the screenshot, upload a new image to your repository and replace the URL above.
 
 ## Why This App Exists
 

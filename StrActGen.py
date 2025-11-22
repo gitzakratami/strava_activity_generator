@@ -5,11 +5,11 @@ import pytz
 import base64
 
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QLabel, QLineEdit, QSpinBox, QPushButton,
-    QCheckBox, QFormLayout, QHBoxLayout, QVBoxLayout, QCalendarWidget, QToolButton
+    QApplication, QWidget, QLabel, QCalendarWidget, QToolButton
 )
 from PyQt6.QtCore import QLocale, Qt, QSize
 from PyQt6.QtGui import QIcon, QPixmap, QTextCharFormat, QColor, QFont
+from PyQt6 import uic  # Moduł do ładowania plików .ui
 
 # --- CONFIGURATION ---
 APP_DATA_PATH = os.path.join(os.getenv('LOCALAPPDATA'), 'StravaActivityGenerator')
@@ -29,7 +29,6 @@ RIGHT_ARROW_B64 = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgAQMAAABJtOi3AAAAAXNSR0IB2cksf
 def load_config():
     os.makedirs(APP_DATA_PATH, exist_ok=True)
     if not os.path.exists(CONFIG_FILE_PATH): 
-        # Default last_number is 0, so the first workout starts at #1
         return {'base_name': 'Muay Thai', 'last_number': 0}
     
     config = {}
@@ -72,6 +71,7 @@ def create_gpx_file(start_datetime, duration_minutes, workout_name, timezone_str
         return None, str(e)
 
 # --- STYLESHEET (QSS) ---
+# Przeniesione tutaj, ponieważ style calendar widget często psują się w Designerze
 STRAVA_ORANGE = "#FC4C02"
 DARK_BACKGROUND = "#282828"
 LIGHT_BACKGROUND = "#3a3a3a"
@@ -144,64 +144,38 @@ class App(QWidget):
     def __init__(self):
         super().__init__()
         self.config = load_config()
-        self.init_ui()
+        
+        # 1. Załaduj plik .ui
+        try:
+            uic.loadUi("interface.ui", self)
+        except FileNotFoundError:
+            print("Błąd: Nie znaleziono pliku interface.ui w folderze z programem.")
+            sys.exit(1)
+
+        # 2. Zaaplikuj style i ustawienia, których nie ma w .ui
         self.setStyleSheet(STYLESHEET)
+        self.setup_ui_logic()
+        self.setup_calendar_customization()
 
-    def init_ui(self):
-        self.setWindowTitle("Strava Activity Generator")
-        self.resize(630, 275)
-        
-        # Left Panel: Form Layout
-        form_layout = QFormLayout()
-        form_layout.setContentsMargins(10, 10, 10, 10)
-        form_layout.setSpacing(12)
-        self.name_entry = QLineEdit(self.config.get('base_name', 'Muay Thai'))
-        self.number_spinbox = QSpinBox(minimum=1, maximum=9999, value=self.config['last_number'] + 1)
-        time_layout = QHBoxLayout()
-        self.hour_spinbox = QSpinBox(minimum=0, maximum=23, value=20)
-        self.minute_spinbox = QSpinBox(minimum=0, maximum=59, value=30)
-        self.minute_spinbox.setSpecialValueText("00")
-        time_layout.addWidget(self.hour_spinbox)
-        time_layout.addWidget(QLabel(":"))
-        time_layout.addWidget(self.minute_spinbox)
-        time_layout.addStretch()
-        self.duration_entry = QLineEdit("90")
-        self.duration_entry.setFixedWidth(50)
-        
-        form_layout.addRow("Base name:", self.name_entry)
-        form_layout.addRow("Workout number:", self.number_spinbox)
-        form_layout.addRow("Time (HH:MM):", time_layout)
-        form_layout.addRow("Duration (min):", self.duration_entry)
-        
-        left_vbox = QVBoxLayout()
-        left_vbox.addLayout(form_layout)
-        
-        self.auto_advance_check = QCheckBox("Automatically set next date (Tue/Thu)")
-        self.auto_advance_check.setChecked(True)
-        left_vbox.addWidget(self.auto_advance_check)
-        
-        button_layout = QHBoxLayout()
-        self.generate_button = QPushButton("Generate GPX File")
-        self.generate_button.setObjectName("GenerateButton")
-        self.open_folder_button = QPushButton("Open Folder")
-        self.open_folder_button.setObjectName("OpenFolderButton")
+        # 3. Podłącz sygnały (akcje) do przycisków
+        self.generate_button.clicked.connect(self.generate)
+        self.open_folder_button.clicked.connect(self.open_output_folder)
+        self.number_spinbox.valueChanged.connect(self.on_config_changed)
+        self.name_entry.textChanged.connect(self.on_config_changed)
+
+    def setup_ui_logic(self):
+        """Ustawia początkowe wartości widgetów na podstawie konfiguracji"""
+        self.name_entry.setText(self.config.get('base_name', 'Muay Thai'))
+        self.number_spinbox.setValue(self.config['last_number'] + 1)
         self.open_folder_button.setEnabled(os.path.exists(OUTPUT_FOLDER_PATH))
-        button_layout.addWidget(self.generate_button)
-        button_layout.addWidget(self.open_folder_button)
-        left_vbox.addLayout(button_layout)
-        
-        self.status_label = QLabel("")
-        left_vbox.addWidget(self.status_label)
-        left_vbox.addStretch(1)
 
-        # Right Panel: Calendar Widget
-        self.calendar = QCalendarWidget()
-        self.calendar.setVerticalHeaderFormat(QCalendarWidget.VerticalHeaderFormat.NoVerticalHeader)
+    def setup_calendar_customization(self):
+        """Zaawansowana konfiguracja kalendarza (trudna do zrobienia w Designerze)"""
         self.calendar.findChild(QToolButton, "qt_calendar_monthbutton").setEnabled(False)
         self.calendar.setLocale(QLocale(QLocale.Language.English))
         self.calendar.setFirstDayOfWeek(Qt.DayOfWeek.Monday)
-        self.calendar.setGridVisible(True)
-        
+
+        # Kolory dni tygodnia i weekendów
         weekday_format = QTextCharFormat()
         weekday_format.setForeground(QColor(WEEKDAY_TEXT_COLOR))
         weekday_format.setBackground(QColor(LIGHT_BACKGROUND)) 
@@ -218,6 +192,7 @@ class App(QWidget):
         self.calendar.setWeekdayTextFormat(Qt.DayOfWeek.Saturday, weekend_format)
         self.calendar.setWeekdayTextFormat(Qt.DayOfWeek.Sunday, weekend_format)
 
+        # Ikony strzałek (Base64)
         left_pixmap = QPixmap()
         left_pixmap.loadFromData(base64.b64decode(LEFT_ARROW_B64))
         right_pixmap = QPixmap()
@@ -230,25 +205,12 @@ class App(QWidget):
             next_button.setIcon(QIcon(right_pixmap))
             next_button.setIconSize(QSize(16, 16))
 
-        # Main Layout
-        main_layout = QHBoxLayout(self)
-        main_layout.addLayout(left_vbox)
-        main_layout.addWidget(self.calendar)
-        
-        # Connect signals to methods
-        self.generate_button.clicked.connect(self.generate)
-        self.open_folder_button.clicked.connect(self.open_output_folder)
-        self.number_spinbox.valueChanged.connect(self.on_config_changed)
-        self.name_entry.textChanged.connect(self.on_config_changed)
-
     # --- ACTION METHODS ---
     def on_config_changed(self):
         base_name = self.name_entry.text().strip()
         current_number_for_next_workout = self.number_spinbox.value()
-        
         self.config['base_name'] = base_name
         self.config['last_number'] = current_number_for_next_workout - 1
-        
         save_config(self.config)
 
     def open_output_folder(self):
